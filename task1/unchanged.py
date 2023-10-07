@@ -5,7 +5,6 @@ import numpy as np
 from sklearn.gaussian_process import GaussianProcessRegressor
 import matplotlib.pyplot as plt
 from matplotlib import cm
-from sklearn.preprocessing import StandardScaler
 
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
@@ -23,20 +22,15 @@ class Model(object):
     You need to implement the fit_model and predict methods
     without changing their signatures, but are allowed to create additional methods.
     """
-    
+
     def __init__(self):
         """
         Initialize your model here.
         We already provide a random number generator for reproducibility.
         """
         self.rng = np.random.default_rng(seed=0)
-        
+
         # TODO: Add custom initialization for your model here if necessary
-               
-        self.kernel = DotProduct() + ConstantKernel() * Matern() + WhiteKernel(noise_level_bounds=(1e-10, 1e3))
-        self.gp = GaussianProcessRegressor(kernel=self.kernel, random_state=0)
-        self.scaler_y = StandardScaler()
-        
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """
@@ -51,13 +45,10 @@ class Model(object):
         # TODO: Use your GP to estimate the posterior mean and stddev for each city_area here
         gp_mean = np.zeros(test_x_2D.shape[0], dtype=float)
         gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
-        
+
         # TODO: Use the GP posterior to form your predictions here
-        gp_mean, gp_std = self.gp.predict(test_x_2D, return_std=True)
-        predictions = self.scaler_y.inverse_transform(gp_mean.reshape(-1,1)).flatten()
-        
-        
-        assert predictions.shape == gp_mean.shape == gp_std.shape
+        predictions = gp_mean
+
         return predictions, gp_mean, gp_std
 
     def fitting_model(self, train_y: np.ndarray,train_x_2D: np.ndarray):
@@ -68,19 +59,7 @@ class Model(object):
         """
 
         # TODO: Fit your model here
-        self.scaler_y.fit(train_y.reshape(-1,1))
-        train_y_scaled = self.scaler_y.transform(train_y.reshape(-1,1))
-        
-        # if train set is too large, we can use a subset of it to train the model
-        # 100: 1160.652    
-        # 1000: 276.995
-        # 5000: 30.901 
-        if train_x_2D.shape[0] > 5000:
-            train_x_2D = train_x_2D[:5000,:]
-            train_y_scaled = train_y_scaled[:5000,:]
-        self.gp.fit(train_x_2D, train_y_scaled)
-        
-        
+        pass
 
 # You don't have to change this function
 def cost_function(ground_truth: np.ndarray, predictions: np.ndarray, AREA_idxs: np.ndarray) -> float:
@@ -198,13 +177,8 @@ def extract_city_area_information(train_x: np.ndarray, test_x: np.ndarray) -> ty
     test_x_2D = np.zeros((test_x.shape[0], 2), dtype=float)
     test_x_AREA = np.zeros((test_x.shape[0],), dtype=bool)
 
-    #Done: Extract the city_area information from the training and test features
-    
-    train_x_2D = train_x[:,0:2]
-    train_x_AREA = train_x[:,2]
-    test_x_2D = test_x[:,0:2]
-    test_x_AREA = test_x[:,2]
-        
+    #TODO: Extract the city_area information from the training and test features
+
     assert train_x_2D.shape[0] == train_x_AREA.shape[0] and test_x_2D.shape[0] == test_x_AREA.shape[0]
     assert train_x_2D.shape[1] == 2 and test_x_2D.shape[1] == 2
     assert train_x_AREA.ndim == 1 and test_x_AREA.ndim == 1
@@ -223,7 +197,7 @@ def main():
     # Fit the model
     print('Fitting model')
     model = Model()
-    model.fitting_model(train_y[:100],train_x_2D[:100, :])
+    model.fitting_model(train_y,train_x_2D)
 
     # Predict on the test features
     print('Predicting on test features')
