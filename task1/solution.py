@@ -40,7 +40,8 @@ class Model(object):
         self.scaler_y = StandardScaler()
         # 50 15.321
         # 10 12.297
-        self.n_clusters = 10
+        # 5 12.331
+        self.n_clusters = 5
         self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
         
         
@@ -72,7 +73,7 @@ class Model(object):
         assert predictions.shape == gp_mean.shape == gp_std.shape
         return predictions, gp_mean, gp_std
 
-    def fitting_model(self, train_y: np.ndarray,train_x_2D: np.ndarray):
+    def fitting_model(self, train_y: np.ndarray, train_x_2D: np.ndarray):
         """
         Fit your model on the given training data.
         :param train_x_2D: Training features as a 2d NumPy float array of shape (NUM_SAMPLES, 2)
