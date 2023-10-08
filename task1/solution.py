@@ -38,7 +38,9 @@ class Model(object):
         self.kernel = DotProduct() + ConstantKernel() * Matern() + WhiteKernel(noise_level_bounds=(1e-10, 1e3))
         self.gp_list = []
         self.scaler_y = StandardScaler()
-        self.n_clusters = 50
+        # 50 15.321
+        # 10 12.297
+        self.n_clusters = 10
         self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
         
         
