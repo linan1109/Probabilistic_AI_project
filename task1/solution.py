@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 from matplotlib import cm
 from sklearn.preprocessing import StandardScaler
 
+from sklearn.cluster import KMeans
+
 
 # Set `EXTENDED_EVALUATION` to `True` in order to visualize your predictions.
 EXTENDED_EVALUATION = False
@@ -34,8 +36,11 @@ class Model(object):
         # TODO: Add custom initialization for your model here if necessary
                
         self.kernel = DotProduct() + ConstantKernel() * Matern() + WhiteKernel(noise_level_bounds=(1e-10, 1e3))
-        self.gp = GaussianProcessRegressor(kernel=self.kernel, random_state=0)
+        self.gp_list = []
         self.scaler_y = StandardScaler()
+        self.n_clusters = 50
+        self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
+        
         
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
@@ -53,9 +58,14 @@ class Model(object):
         gp_std = np.zeros(test_x_2D.shape[0], dtype=float)
         
         # TODO: Use the GP posterior to form your predictions here
-        gp_mean, gp_std = self.gp.predict(test_x_2D, return_std=True)
+        cluster_idx = self.kmeans.predict(test_x_2D)
+        for i in range(self.n_clusters):
+            idx = cluster_idx == i
+            if len(test_x_2D[idx,:]) == 0:
+                continue
+            gp_mean[idx], gp_std[idx] = self.gp_list[i].predict(test_x_2D[idx,:], return_std=True)
+            
         predictions = self.scaler_y.inverse_transform(gp_mean.reshape(-1,1)).flatten()
-        
         
         assert predictions.shape == gp_mean.shape == gp_std.shape
         return predictions, gp_mean, gp_std
@@ -75,11 +85,16 @@ class Model(object):
         # 100: 1160.652    
         # 1000: 276.995
         # 5000: 30.901 
-        if train_x_2D.shape[0] > 5000:
-            train_x_2D = train_x_2D[:5000,:]
-            train_y_scaled = train_y_scaled[:5000,:]
-        self.gp.fit(train_x_2D, train_y_scaled)
+        # if train_x_2D.shape[0] > 5000:
+        #     train_x_2D = train_x_2D[:5000,:]
+        #     train_y_scaled = train_y_scaled[:5000,:]
         
+        self.kmeans.fit(train_x_2D, train_y_scaled)
+        for i in range(self.n_clusters):
+            idx = self.kmeans.labels_ == i
+            gp = GaussianProcessRegressor(kernel=self.kernel, random_state=0)
+            gp.fit(train_x_2D[idx,:], train_y_scaled[idx,:])
+            self.gp_list.append(gp)
         
 
 # You don't have to change this function
