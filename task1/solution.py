@@ -35,8 +35,11 @@ class Model(object):
         
         # TODO: Add custom initialization for your model here if necessary
                
-        self.kernel = DotProduct() + ConstantKernel() * Matern() + RBF()  + WhiteKernel(noise_level_bounds=(1e-10, 1e3)) 
-        # + RationalQuadratic() + ExpSineSquared()
+        self.kernel = ConstantKernel() * Matern() + RBF(length_scale_bounds=(1e-10, 1e7)) \
+            + DotProduct() + Exponentiation(DotProduct(), 2) + WhiteKernel(noise_level_bounds=(1e-10, 1e7))
+        #  + ExpSineSquared() not work  
+        #  + RBF(length_scale_bounds=(1e-10, 1e7)) 4.235
+        #  + RationalQuadratic(length_scale_bounds=(1e-10, 1e7)) 4.341
         self.gp_list = []
         self.scaler_y = StandardScaler()
         # 50 15.321
