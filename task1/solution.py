@@ -69,9 +69,13 @@ class Model(object):
             gp_mean[idx], gp_std[idx] = self.gp_list[i].predict(test_x_2D[idx,:], return_std=True)
         
         predictions = gp_mean.copy()
+        # 1.25 4.552
+        # 1 4.240
+        # 0.5 5.218
+        # 0.25 7.449
         for i in range(len(predictions)):
             if test_x_AREA[i] == 1:
-                predictions[i] = gp_mean[i] + 0.5 * gp_std[i]
+                predictions[i] = gp_mean[i] + 1 * gp_std[i]
 
         predictions = self.scaler_y.inverse_transform(predictions.reshape(-1,1)).flatten()
         
