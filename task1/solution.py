@@ -41,7 +41,7 @@ class Model(object):
         # 50 15.321
         # 10 12.297
         # 5 12.331
-        self.n_clusters = 5
+        self.n_clusters = 10
         self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
         
         
@@ -67,8 +67,13 @@ class Model(object):
             if len(test_x_2D[idx,:]) == 0:
                 continue
             gp_mean[idx], gp_std[idx] = self.gp_list[i].predict(test_x_2D[idx,:], return_std=True)
-            
-        predictions = self.scaler_y.inverse_transform(gp_mean.reshape(-1,1)).flatten()
+        
+        predictions = gp_mean.copy()
+        for i in range(len(predictions)):
+            if test_x_AREA[i] == 1:
+                predictions[i] = gp_mean[i] + 0.5 * gp_std[i]
+
+        predictions = self.scaler_y.inverse_transform(predictions.reshape(-1,1)).flatten()
         
         assert predictions.shape == gp_mean.shape == gp_std.shape
         return predictions, gp_mean, gp_std
