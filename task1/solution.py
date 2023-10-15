@@ -18,7 +18,6 @@ EVALUATION_GRID_POINTS = 300  # Number of grid points used in extended evaluatio
 COST_W_UNDERPREDICT = 50.0
 COST_W_NORMAL = 1.0
 
-
 class Model(object):
     """
     Model for this task.
@@ -35,8 +34,9 @@ class Model(object):
         
         # TODO: Add custom initialization for your model here if necessary
                
-        self.kernel = ConstantKernel() * Matern() + RBF(length_scale_bounds=(1e-10, 1e7)) \
-            + DotProduct() + Exponentiation(DotProduct(), 2) + WhiteKernel(noise_level_bounds=(1e-10, 1e7))
+        self.kernel = Matern() + WhiteKernel()
+        # self.kernel = ConstantKernel() * Matern() + RBF(length_scale_bounds=(1e-10, 1e7)) \
+            # + DotProduct() + Exponentiation(DotProduct(), 2) + WhiteKernel(noise_level_bounds=(1e-10, 1e7))
         #  + ExpSineSquared() not work  
         #  + RBF(length_scale_bounds=(1e-10, 1e7)) 4.235
         #  + RationalQuadratic(length_scale_bounds=(1e-10, 1e7)) 4.341
@@ -45,9 +45,19 @@ class Model(object):
         # 50 15.321
         # 10 12.297
         # 5 12.331
-        self.n_clusters = 10
-        self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
         
+        # 30 4.817
+        # 25 3.948
+        # 20 3.909
+        # 15 4.081
+        # 10 4.248
+        # 6 4.003
+        # 5 3.943
+        # 4 3.969
+        # 3 4.001
+        # 2 4.527
+        self.n_clusters = 20
+        self.kmeans = KMeans(n_clusters=self.n_clusters, random_state=0)
         
 
     def make_predictions(self, test_x_2D: np.ndarray, test_x_AREA: np.ndarray) -> typing.Tuple[np.ndarray, np.ndarray, np.ndarray]:
