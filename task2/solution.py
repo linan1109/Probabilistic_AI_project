@@ -16,14 +16,13 @@ from matplotlib import pyplot as plt
 from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve, ece
 
 THRESHOLD = 0.7
-TQDM_DISABLE = False
 
 EXTENDED_EVALUATION = False
 """
 Set `EXTENDED_EVALUATION` to `True` in order to generate additional plots on validation data.
 """
 
-USE_PRETRAINED_INIT = False
+USE_PRETRAINED_INIT = True
 """
 If `USE_PRETRAINED_INIT` is `True`, then MAP inference uses provided pretrained weights.
 You should not modify MAP training or the CNN architecture before passing the hard baseline.
@@ -118,10 +117,10 @@ class SWAGInference(object):
         # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
         # TODO(2): optionally add/tweak hyperparameters
         inference_mode: InferenceMode = InferenceMode.SWAG_FULL,
-        swag_epochs: int = 300,
-        swag_learning_rate: float = 0.02,
-        swag_update_freq: int = 10,
-        deviation_matrix_max_rank: int = 20,
+        swag_epochs: int = 100,
+        swag_learning_rate: float = 0.045,
+        swag_update_freq: int = 5,
+        deviation_matrix_max_rank: int = 15,
         bma_samples: int = 100,
         # MARK
     ):
@@ -237,7 +236,7 @@ class SWAGInference(object):
         self.theta_bar = self._create_weight_copy()
         
         self.network.train()
-        with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA", disable=TQDM_DISABLE) as pbar:
+        with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA", disable=True) as pbar:
             pbar_dict = {}
             for epoch in pbar:
                 average_loss = 0.0
@@ -330,7 +329,7 @@ class SWAGInference(object):
         # for each datapoint, you can save time by sampling self.bma_samples networks,
         # and perform inference with each network on all samples in loader.
         per_model_sample_predictions = []
-        for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging", disable=TQDM_DISABLE):
+        for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging", disable=True):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
             # raise NotImplementedError("Sample network parameters")
             self.sample_parameters()
@@ -508,7 +507,7 @@ class SWAGInference(object):
         # Batch normalization layers are only updated if the network is in training mode,
         # and are replaced by a moving average if the network is in evaluation mode.
         self.network.train()
-        with tqdm.trange(map_epochs, desc="Fitting initial MAP weights", disable=TQDM_DISABLE) as pbar:
+        with tqdm.trange(map_epochs, desc="Fitting initial MAP weights", disable=True) as pbar:
             pbar_dict = {}
             # Perform the specified number of MAP epochs
             for epoch in pbar:
