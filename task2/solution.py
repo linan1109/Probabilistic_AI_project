@@ -13,14 +13,17 @@ import torch.utils.data
 import tqdm
 from matplotlib import pyplot as plt
 
-from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve
+from util import draw_reliability_diagram, cost_function, setup_seeds, calc_calibration_curve, ece
+
+THRESHOLD = 0.7
+TQDM_DISABLE = False
 
 EXTENDED_EVALUATION = False
 """
 Set `EXTENDED_EVALUATION` to `True` in order to generate additional plots on validation data.
 """
 
-USE_PRETRAINED_INIT = True
+USE_PRETRAINED_INIT = False
 """
 If `USE_PRETRAINED_INIT` is `True`, then MAP inference uses provided pretrained weights.
 You should not modify MAP training or the CNN architecture before passing the hard baseline.
@@ -113,18 +116,13 @@ class SWAGInference(object):
         model_dir: pathlib.Path,
         # TODO(1): change inference_mode to InferenceMode.SWAG_DIAGONAL
         # TODO(2): change inference_mode to InferenceMode.SWAG_FULL
-        inference_mode: InferenceMode = InferenceMode.SWAG_DIAGONAL,
         # TODO(2): optionally add/tweak hyperparameters
-        swag_epochs: int = 30,
-        swag_learning_rate: float = 0.045,
-        swag_update_freq: int = 3,
-        deviation_matrix_max_rank: int = 15,
-        bma_samples: int = 30,
-        # swag_epochs: int = 30,
-        # swag_learning_rate: float = 0.045,
-        # swag_update_freq: int = 1,
-        # deviation_matrix_max_rank: int = 3,
-        # bma_samples: int = 3,
+        inference_mode: InferenceMode = InferenceMode.SWAG_FULL,
+        swag_epochs: int = 300,
+        swag_learning_rate: float = 0.02,
+        swag_update_freq: int = 10,
+        deviation_matrix_max_rank: int = 20,
+        bma_samples: int = 100,
         # MARK
     ):
         """
@@ -173,8 +171,6 @@ class SWAGInference(object):
         # Full SWAG
         # TODO(2): create attributes for SWAG-diagonal
         #  Hint: check collections.deque
-        self.alpha_1 = swag_learning_rate
-        self.alpha_2 = swag_learning_rate / 10
 
         # Calibration, prediction, and other attributes
         # TODO(2): create additional attributes, e.g., for calibration
@@ -187,7 +183,6 @@ class SWAGInference(object):
         # MARK
         # Create a copy of the current network weights
         current_params = {name: param.detach() for name, param in self.network.named_parameters()}
-        print('update swag')
         # SWAG-diagonal
         for name, param in current_params.items():
             # TODO(1): update SWAG-diagonal attributes for weight `name` using `current_params` and `param`
@@ -200,6 +195,8 @@ class SWAGInference(object):
         if self.inference_mode == InferenceMode.SWAG_FULL:
             # TODO(2): update full SWAG attributes for weight `name` using `current_params` and `param`
             # raise NotImplementedError("Update full SWAG statistics")
+            if len(self.deviation[name]) >= self.deviation_matrix_max_rank:
+                self.deviation[name].popleft()
             for name, param in current_params.items():
                 flatten_param = param - self.theta_bar[name]
                 self.deviation[name].append(flatten_param.flatten())
@@ -240,7 +237,7 @@ class SWAGInference(object):
         self.theta_bar = self._create_weight_copy()
         
         self.network.train()
-        with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA") as pbar:
+        with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA", disable=TQDM_DISABLE) as pbar:
             pbar_dict = {}
             for epoch in pbar:
                 average_loss = 0.0
@@ -292,7 +289,7 @@ class SWAGInference(object):
 
         # TODO(1): pick a prediction threshold, either constant or adaptive.
         #  The provided value should suffice to pass the easy baseline.
-        self._prediction_threshold = 2.0 / 3.0
+        self._prediction_threshold = THRESHOLD
 
         # TODO(2): perform additional calibration if desired.
         #  Feel free to remove or change the prediction threshold.
@@ -301,6 +298,21 @@ class SWAGInference(object):
         assert val_ys.size() == (140,)
         assert val_is_snow.size() == (140,)
         assert val_is_cloud.size() == (140,)
+        
+        # pred_prob = self.predict_probabilities(val_xs)
+        # space = np.linspace(0, 1, 1000)
+        # costs = []
+        # for threshold in tqdm.tqdm(space, desc="Finding optimal threshold"):
+        #     self._prediction_threshold = threshold
+        #     pred_labels = self.predict_labels(pred_prob)
+        #     cost = cost_function(pred_labels, val_ys)
+        #     costs.append(cost)
+        # plt.plot(space, costs)
+        # plt.show()
+        # plt.savefig(pathlib.Path.cwd() / 'cost.png')
+        # self._prediction_threshold = space[np.argmin(costs)] * 1.1
+        # print('threshold', self._prediction_threshold, 'for cost', np.min(costs))
+        
 
     def predict_probabilities_swag(self, loader: torch.utils.data.DataLoader) -> torch.Tensor:
         """
@@ -318,7 +330,7 @@ class SWAGInference(object):
         # for each datapoint, you can save time by sampling self.bma_samples networks,
         # and perform inference with each network on all samples in loader.
         per_model_sample_predictions = []
-        for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging"):
+        for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging", disable=TQDM_DISABLE):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
             # raise NotImplementedError("Sample network parameters")
             self.sample_parameters()
@@ -329,8 +341,6 @@ class SWAGInference(object):
             p_y_given_data = []
             for (batch_xs,) in loader:
                 linear =self.network.forward(batch_xs)
-                if linear.isnan().any():
-                    print("nan")
                 p_y_given_data.append(torch.softmax(linear, dim=-1))
             p_y_given_data = torch.cat(p_y_given_data)
             per_model_sample_predictions.append(p_y_given_data)
@@ -347,8 +357,6 @@ class SWAGInference(object):
         # TODO(1): Average predictions from different model samples into bma_probabilities
         # raise NotImplementedError("Aggregate predictions from model samples")
         bma_probabilities = torch.stack(per_model_sample_predictions).mean(dim=0)
-        # bma_probabilities /= bma_probabilities.sum(dim=-1, keepdim=True)
-        # MARK
         assert bma_probabilities.dim() == 2 and bma_probabilities.size(1) == 6  # N x C
         return bma_probabilities
 
@@ -372,6 +380,7 @@ class SWAGInference(object):
             # print()
             # Diagonal part
             sampled_param = current_mean + current_std * z_1
+            
 
             # Full SWAG part
             if self.inference_mode == InferenceMode.SWAG_FULL:
@@ -380,8 +389,10 @@ class SWAGInference(object):
                 k = len(self.deviation[name])
                 z_2 = torch.randn((1, k))
                 dev = self.deviation[name]
+                # print(name, dev.size())
                 mul = torch.matmul(z_2,dev).squeeze().reshape(param.size()) / math.sqrt(k-1)
                 sampled_param = current_mean + ((current_std * z_1) + mul) / math.sqrt(2)
+
                 # print(sampled_param)
 
             # print('percentage', 1 - sampled_param / param)
@@ -420,6 +431,9 @@ class SWAGInference(object):
             max_likelihood_labels,
             torch.ones_like(max_likelihood_labels) * -1,
         )
+
+        
+        
 
     def _create_weight_copy(self) -> typing.Dict[str, torch.Tensor]:
         """Create an all-zero copy of the network weights as a dictionary that maps name -> weight"""
@@ -494,7 +508,7 @@ class SWAGInference(object):
         # Batch normalization layers are only updated if the network is in training mode,
         # and are replaced by a moving average if the network is in evaluation mode.
         self.network.train()
-        with tqdm.trange(map_epochs, desc="Fitting initial MAP weights") as pbar:
+        with tqdm.trange(map_epochs, desc="Fitting initial MAP weights", disable=TQDM_DISABLE) as pbar:
             pbar_dict = {}
             # Perform the specified number of MAP epochs
             for epoch in pbar:
