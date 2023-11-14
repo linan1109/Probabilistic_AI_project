@@ -63,8 +63,8 @@ class SWAGInference(object):
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 100, 
         swag_learning_rate: float = 0.045,
-        swag_update_freq: int = 1,
-        deviation_matrix_max_rank: int = 100,
+        swag_update_freq: int = 4,
+        deviation_matrix_max_rank: int = 25,
         bma_samples: int = 100,
     ):
         """
