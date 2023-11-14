@@ -63,8 +63,8 @@ class SWAGInference(object):
         # TODO(2): optionally add/tweak hyperparameters
         swag_epochs: int = 100, 
         swag_learning_rate: float = 0.045,
-        swag_update_freq: int = 5,
-        deviation_matrix_max_rank: int = 15,
+        swag_update_freq: int = 1,
+        deviation_matrix_max_rank: int = 100,
         bma_samples: int = 100,
     ):
         """
@@ -184,7 +184,7 @@ class SWAGInference(object):
         
         
         self.network.train()
-        with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA") as pbar:
+        with tqdm.trange(self.swag_epochs, desc="Running gradient descent for SWA", disable=True) as pbar:
             pbar_dict = {}
             for epoch in pbar:
                 average_loss = 0.0
@@ -274,7 +274,7 @@ class SWAGInference(object):
         # for each datapoint, you can save time by sampling self.bma_samples networks,
         # and perform inference with each network on all samples in loader.
         per_model_sample_predictions = []
-        for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging"):
+        for _ in tqdm.trange(self.bma_samples, desc="Performing Bayesian model averaging", disable=True):
             # TODO(1): Sample new parameters for self.network from the SWAG approximate posterior
             self.sample_parameters()
             # raise NotImplementedError("Sample network parameters")
@@ -439,7 +439,7 @@ class SWAGInference(object):
         # Batch normalization layers are only updated if the network is in training mode,
         # and are replaced by a moving average if the network is in evaluation mode.
         self.network.train()
-        with tqdm.trange(map_epochs, desc="Fitting initial MAP weights") as pbar:
+        with tqdm.trange(map_epochs, desc="Fitting initial MAP weights", disable=True) as pbar:
             pbar_dict = {}
             # Perform the specified number of MAP epochs
             for epoch in pbar:
