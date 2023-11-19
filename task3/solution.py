@@ -1,12 +1,48 @@
 """Solution."""
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
+from sklearn.gaussian_process import GaussianProcessRegressor
+from sklearn.gaussian_process.kernels import Matern, RBF, DotProduct
 # import additional ...
 
 
 # global variables
 DOMAIN = np.array([[0, 10]])  # restrict \theta in [0, 10]
 SAFETY_THRESHOLD = 4  # threshold, upper bound of SA
+RANDOM_STATE = 0
+
+class Queue:
+    def __init__(self):
+        self._x = None
+        self._f = np.array([])
+        self._v = np.array([])
+
+    @property
+    def empty(self):
+        return len(self) == 0
+
+    def __len__(self):
+        return len(self._x)
+
+    def __next__(self):
+        if self.empty:
+            raise StopIteration("Queue is empty, no more objects to retrieve.")
+        x = self._x[0]
+        f = self._f[0]
+        v = self._v[0]
+        self._x = self._x[1:]
+        self._f = self._f[1:]
+        self._v = self._v[1:]
+        return x, f, v
+
+    def add(self, x, f, v):
+        """Add object to end of queue."""
+        if self._x is None:
+            self._x = np.atleast_2d(x)
+        else:
+            self._x = np.vstack([self._x, x])
+        self._f = np.append(self._f, f)
+        self._v = np.append(self._v, v)
 
 
 # TODO: implement a self-contained solution in the BO_algo class.
@@ -15,7 +51,29 @@ class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
-        pass
+        #  RBF kernel with variance 0.5 and length-scale 1
+        self._kernel_f = Matern(nu=2.5) 
+        # 0.5 * RBF(length_scale=1.0) 
+        self._f_sigma = 0.15
+        self._f = GaussianProcessRegressor(
+            kernel=self._kernel_f, 
+            alpha= self._f_sigma**2,
+            random_state=RANDOM_STATE)
+        
+        
+
+        self._kernel_v = Matern(nu=2.5) + DotProduct(sigma_0=0)
+        # (2**0.5) * RBF(length_scale=1.0)
+        self._v_sigma = 0.0001
+        self.x_sample = []
+        self._v = GaussianProcessRegressor(
+            kernel=self._kernel_v, 
+            alpha= self._v_sigma**2,
+            random_state=RANDOM_STATE)
+        
+        self._queue = Queue()
+        self._beta = 3
+        
 
     def next_recommendation(self):
         """
@@ -30,8 +88,12 @@ class BO_algo():
         # using functions f and v.
         # In implementing this function, you may use
         # optimize_acquisition_function() defined below.
-
-        raise NotImplementedError
+        # if(len(self.x_sample) == 0):
+        #     return get_initial_safe_point()
+        
+        x_opt = self.optimize_acquisition_function()
+        x_opt = np.atleast_2d(x_opt)
+        return x_opt
 
     def optimize_acquisition_function(self):
         """Optimizes the acquisition function defined below (DO NOT MODIFY).
@@ -79,7 +141,11 @@ class BO_algo():
         """
         x = np.atleast_2d(x)
         # TODO: Implement the acquisition function you want to optimize.
-        raise NotImplementedError
+        mean, std = self._f.predict(x, return_std=True)
+        sa = self._v.predict(x)
+        res = mean + self._beta * std if sa < SAFETY_THRESHOLD else  -10086
+        return res
+        
 
     def add_data_point(self, x: float, f: float, v: float):
         """
@@ -95,8 +161,14 @@ class BO_algo():
             SA constraint func
         """
         # TODO: Add the observed data {x, f, v} to your model.
-        raise NotImplementedError
-
+        # select the data point that has max uncertainty
+        
+        x = np.atleast_2d(x)
+        self._queue.add(x, f, v)
+        self._f.fit(self._queue._x, self._queue._f)
+        self._v.fit(self._queue._x, self._queue._v)
+        
+        
     def get_solution(self):
         """
         Return x_opt that is believed to be the maximizer of f.
@@ -107,7 +179,16 @@ class BO_algo():
             the optimal solution of the problem
         """
         # TODO: Return your predicted safe optimum of f.
-        raise NotImplementedError
+        x_domain = np.linspace(*DOMAIN[0], 4000)[:, None]
+        f_max = -np.inf
+        x_opt = 0
+        for x in x_domain:
+            mean, std = self._f.predict([x], return_std=True)
+            sa = self._v.predict([x])
+            if sa < SAFETY_THRESHOLD and mean + self._beta * std > f_max:
+                f_max = mean + self._beta * std
+                x_opt = x
+        return x_opt
 
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
@@ -175,8 +256,8 @@ def main():
             f"shape (1, {DOMAIN.shape[0]})"
 
         # Obtain objective and constraint observation
-        obj_val = f(x) + np.randn()
-        cost_val = v(x) + np.randn()
+        obj_val = f(x) + np.random.randn() 
+        cost_val = v(x) + np.random.randn() 
         agent.add_data_point(x, obj_val, cost_val)
 
     # Validate solution
