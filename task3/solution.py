@@ -203,7 +203,8 @@ class BO_algo():
         f_max_idx = np.argmax(self._queue._f[self._queue._v < SAFETY_THRESHOLD])
         x_opt = self._queue._x[f_max_idx]
         f_max = self._queue._f[f_max_idx]
-        
+        return x_opt
+
         x_domain = np.linspace(*DOMAIN[0], 10000)[:, None]
         for x in x_domain:
             mean, std = self._f.predict([x], return_std=True)
