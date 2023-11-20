@@ -73,7 +73,7 @@ class BO_algo():
         
         self._beta_f = 0.5
         self._beta_v = 10.0
-        self._lambda = 0.5
+        self._lambda = 5
         
         self._queue = Queue()
 
