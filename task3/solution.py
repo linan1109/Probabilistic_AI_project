@@ -2,7 +2,9 @@
 import numpy as np
 from scipy.optimize import fmin_l_bfgs_b
 from sklearn.gaussian_process import GaussianProcessRegressor
-from sklearn.gaussian_process.kernels import Matern, RBF, DotProduct
+from sklearn.gaussian_process.kernels import Matern, RBF, DotProduct, ConstantKernel, WhiteKernel
+from scipy.stats import norm
+import matplotlib.pyplot as plt
 # import additional ...
 
 
@@ -51,29 +53,29 @@ class BO_algo():
     def __init__(self):
         """Initializes the algorithm with a parameter configuration."""
         # TODO: Define all relevant class members for your BO algorithm here.
-        #  RBF kernel with variance 0.5 and length-scale 1
-        self._kernel_f = Matern(nu=2.5) 
-        # 0.5 * RBF(length_scale=1.0) 
+        # self._kernel_f = ConstantKernel(0.5) * RBF(length_scale=1.0) 
+        self._kernel_f = Matern(nu=2.5) + WhiteKernel(noise_level_bounds=(1e-10, 1e3))
         self._f_sigma = 0.15
         self._f = GaussianProcessRegressor(
             kernel=self._kernel_f, 
-            alpha= self._f_sigma**2,
+            # alpha=self._f_sigma**2,
             random_state=RANDOM_STATE)
-        
         
 
-        self._kernel_v = Matern(nu=2.5) + DotProduct(sigma_0=0)
-        # (2**0.5) * RBF(length_scale=1.0)
+        # self._kernel_v = Matern(nu=2.5) + DotProduct(sigma_0=0)
+        # self._kernel_v = ConstantKernel(2**0.5) * RBF(length_scale=1.0)
+        self._kernel_v = DotProduct() + ConstantKernel() * Matern(nu=2.5) + WhiteKernel(noise_level_bounds=(1e-10, 1e3))
         self._v_sigma = 0.0001
-        self.x_sample = []
         self._v = GaussianProcessRegressor(
             kernel=self._kernel_v, 
-            alpha= self._v_sigma**2,
+            alpha=self._v_sigma**2,
             random_state=RANDOM_STATE)
         
-        self._queue = Queue()
-        self._beta = 3
+        self._beta_f = 0.5
+        self._beta_v = 10.0
+        self._lambda = 0.5
         
+        self._queue = Queue()
 
     def next_recommendation(self):
         """
@@ -142,9 +144,28 @@ class BO_algo():
         x = np.atleast_2d(x)
         # TODO: Implement the acquisition function you want to optimize.
         mean, std = self._f.predict(x, return_std=True)
-        sa = self._v.predict(x)
-        res = mean + self._beta * std if sa < SAFETY_THRESHOLD else  -10086
-        return res
+        sa, sa_std = self._v.predict(x, return_std=True)
+        
+        # UCB
+        # return mean + self._beta * std if sa < SAFETY_THRESHOLD else -10086 
+        ucb_f = mean + self._beta_f * std
+        ucb_v = max(0, sa + self._beta_v * sa_std - SAFETY_THRESHOLD)
+        return ucb_f - self._lambda * ucb_v
+        
+        # esp = 0.0
+        # # probability of improvement of v
+        # pi_v = norm.cdf((sa - 0 - esp) / sa_std)
+        
+        # f_usable = self._queue._f[self._queue._v < SAFETY_THRESHOLD]
+        # if len(f_usable) < 0.1 * len(self._queue._f):
+        #     return pi_v
+        
+        # f_star = np.max(f_usable)
+        # Z = (mean - f_star - esp) / std
+        # # expected improvement of f
+        # ei_f = (mean - f_star - esp) * norm.cdf(Z) + std * norm.pdf(Z)
+
+        # return pi_v * ei_f
         
 
     def add_data_point(self, x: float, f: float, v: float):
@@ -179,14 +200,16 @@ class BO_algo():
             the optimal solution of the problem
         """
         # TODO: Return your predicted safe optimum of f.
-        x_domain = np.linspace(*DOMAIN[0], 4000)[:, None]
-        f_max = -np.inf
-        x_opt = 0
+        f_max_idx = np.argmax(self._queue._f[self._queue._v < SAFETY_THRESHOLD])
+        x_opt = self._queue._x[f_max_idx]
+        f_max = self._queue._f[f_max_idx]
+        
+        x_domain = np.linspace(*DOMAIN[0], 10000)[:, None]
         for x in x_domain:
             mean, std = self._f.predict([x], return_std=True)
             sa = self._v.predict([x])
-            if sa < SAFETY_THRESHOLD and mean + self._beta * std > f_max:
-                f_max = mean + self._beta * std
+            if sa < SAFETY_THRESHOLD and mean + self._beta_f * std > f_max:
+                f_max = mean + self._beta_f * std
                 x_opt = x
         return x_opt
 
@@ -198,7 +221,13 @@ class BO_algo():
         plot_recommendation: bool
             Plots the recommended point if True.
         """
-        pass
+        plt.figure(figsize=(8, 6))
+        x_axis = range(1, len(self.x) + 1)
+        plt.plot(x_axis, self.x, 'r.', markersize=10, label='Observations')
+        plt.plot(x_axis, self.f, 'b-', label='f')
+        plt.plot(x_axis, self.v, 'g-', label='v')
+        plt.legend(loc='best')
+        plt.show()
 
 
 # ---
