@@ -205,14 +205,14 @@ class BO_algo():
         f_max = self._queue._f[f_max_idx]
         return x_opt
 
-        x_domain = np.linspace(*DOMAIN[0], 10000)[:, None]
-        for x in x_domain:
-            mean, std = self._f.predict([x], return_std=True)
-            sa = self._v.predict([x])
-            if sa < SAFETY_THRESHOLD and mean + self._beta_f * std > f_max:
-                f_max = mean + self._beta_f * std
-                x_opt = x
-        return x_opt
+        # x_domain = np.linspace(*DOMAIN[0], 10000)[:, None]
+        # for x in x_domain:
+        #     mean, std = self._f.predict([x], return_std=True)
+        #     sa = self._v.predict([x])
+        #     if sa < SAFETY_THRESHOLD and mean + self._beta_f * std > f_max:
+        #         f_max = mean + self._beta_f * std
+        #         x_opt = x
+        # return x_opt
 
     def plot(self, plot_recommendation: bool = True):
         """Plot objective and constraint posterior for debugging (OPTIONAL).
@@ -222,13 +222,7 @@ class BO_algo():
         plot_recommendation: bool
             Plots the recommended point if True.
         """
-        plt.figure(figsize=(8, 6))
-        x_axis = range(1, len(self.x) + 1)
-        plt.plot(x_axis, self.x, 'r.', markersize=10, label='Observations')
-        plt.plot(x_axis, self.f, 'b-', label='f')
-        plt.plot(x_axis, self.v, 'g-', label='v')
-        plt.legend(loc='best')
-        plt.show()
+        pass
 
 
 # ---
